@@ -5,8 +5,10 @@
 # will automatically download this dictionary for you if you don't
 # have it already.
 
+require('set')
+
 path = ARGV.length > 0 ? ARGV[0] : '/usr/share/dict/words'
-entries = File.read(path).split("\n")
+entries = File.read(path).split("\n").to_set
 
 contents = $stdin.read
 output = contents.gsub(/[^ \n]+/) do |word|
