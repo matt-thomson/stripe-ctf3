@@ -8,6 +8,8 @@ var checkServer = require('./network_simulation/lib/check_server');
 var nopt = require('nopt');
 var url = require('url');
 
+var blacklist = {}
+
 var RequestData = function (request, response, buffer) {
   this.request = request;
   this.response = response;
@@ -29,16 +31,28 @@ var Queue = function (proxies, parameters) {
 };
 Queue.prototype.takeRequest = function (reqData) {
   // Reject traffic as necessary:
-  // if (currently_blacklisted(ipFromRequest(reqData))) {
-  //   rejectRequest(reqData);
-  //   return;
-  // }
+  if (currently_blacklisted(ipFromRequest(reqData))) {
+    rejectRequest(reqData);
+    return;
+  }
+
   // Otherwise proxy it through:
-  this.proxies[0].proxyRequest(reqData.request, reqData.response, reqData.buffer);
+  var proxyNum = Math.floor(Math.random() * proxies.length)
+  this.proxies[proxyNum].proxyRequest(reqData.request, reqData.response, reqData.buffer);
 };
 Queue.prototype.requestFinished = function () {
   return;
 };
+
+function currently_blacklisted(ipAddr) {
+  var oldCount = blacklist[ipAddr] || 0
+  if (oldCount >= 10) {
+    return true;
+  }
+
+  blacklist[ipAddr] = oldCount + 1
+  return false;
+}
 
 function checkBackends(targets, path, response) {
   var toCheck = targets.map(function (target) {
