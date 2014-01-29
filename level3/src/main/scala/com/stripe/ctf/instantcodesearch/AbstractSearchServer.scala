@@ -26,7 +26,7 @@ abstract class AbstractSearchServer(port: Int, id: Int) extends TwitterServer {
     val params = decoder.getParameters.asScala.mapValues {_.asScala}
 
     try {
-      decoder.getPath() match {
+      decoder.getPath match {
         case "/index" => index(getParam(params, "path"))
         case "/" => query(getParam(params, "q"))
         case "/healthcheck" => healthcheck()
@@ -61,7 +61,7 @@ abstract class AbstractSearchServer(port: Int, id: Int) extends TwitterServer {
     httpResponse(content, HttpResponseStatus.OK)
   }
 
-  def querySuccessResponse(results: List[Match]): HttpResponse = {
+  def querySuccessResponse(results: Set[Match]): HttpResponse = {
     val response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
     val resultString = results
       .map {r => "\"" + r.path + ":" + r.line + "\""}
@@ -78,11 +78,14 @@ abstract class AbstractSearchServer(port: Int, id: Int) extends TwitterServer {
   }
 
   def getParam(params: Map[String, Buffer[String]], key: String) : String = {
-    params.get(key)
-      .flatMap { _.headOption }
+    getParamOpt(params, key)
       .getOrElse {
         throw new BadRequestException("Parameter '" + key + "' not specified")
       }
+  }
+
+  def getParamOpt(params: Map[String, Buffer[String]], key: String) : Option[String] = {
+    params.get(key).flatMap { _.headOption }
   }
 
   def readIndex(path: String): Index = {

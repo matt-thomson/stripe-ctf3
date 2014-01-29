@@ -1,26 +1,28 @@
 package com.stripe.ctf.instantcodesearch
 
-import java.io._
+import scala.collection.JavaConversions._
+import com.twitter.concurrent.Broker
+import com.google.common.collect.{HashMultimap, Multimaps}
 
-class Index(repoPath: String) extends Serializable {
-  var files = List[String]()
+abstract class SearchResult
 
-  def path() = repoPath
+case class Match(path: String, line: Int) extends SearchResult
 
-  def addFile(file: String, text: String) {
-    files = file :: files
-  }
+case class Done() extends SearchResult
 
-  def write(out: File) {
-    val stream = new FileOutputStream(out)
-    write(stream)
-    stream.close
-  }
 
-  def write(out: OutputStream) {
-    val w = new ObjectOutputStream(out)
-    w.writeObject(this)
-    w.close
+class Index() {
+  private val content = Multimaps.synchronizedMultimap(HashMultimap.create[String, Match]())
+  private val dictionary = new Dictionary
+
+  def addMatch(word: String, m: Match) = content.put(word, m)
+
+  def search(query: String, b: Broker[SearchResult]) = {
+    for (word <- dictionary.findMatches(query); m <- content.get(word)) {
+      b !! m
+    }
+
+    b !! new Done()
   }
 }
 

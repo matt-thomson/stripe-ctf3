@@ -2,35 +2,27 @@ package com.stripe.ctf.instantcodesearch
 
 import com.twitter.util.{Future, Promise, FuturePool}
 import com.twitter.concurrent.Broker
-import org.jboss.netty.handler.codec.http.{HttpResponse, HttpResponseStatus}
+import org.jboss.netty.handler.codec.http.{HttpResponseStatus, HttpResponse}
 
 class SearchServer(port : Int, id : Int) extends AbstractSearchServer(port, id) {
-  val IndexPath = "instantcodesearch-" + id + ".index"
   case class Query(q : String, broker : Broker[SearchResult])
-  lazy val searcher = new Searcher(IndexPath)
-  @volatile var indexed = false
+  @volatile var index: Option[Index] = None
 
   override def healthcheck() = {
     Future.value(successResponse())
   }
 
-  override def isIndexed() = {
-    if (indexed) {
-      Future.value(successResponse())
-    }
-    else {
-      Future.value(errorResponse(HttpResponseStatus.OK, "Not indexed"))
-    }
+  override def isIndexed() = index match {
+    case Some(_) => Future.value(successResponse())
+    case None => Future.value(errorResponse(HttpResponseStatus.OK, "Still indexing"))
   }
+
   override def index(path: String) = {
-    val indexer = new Indexer(path)
+    val indexer = new Indexer(path, id % 3)
 
     FuturePool.unboundedPool {
       System.err.println("[node #" + id + "] Indexing path: " + path)
-      indexer.index()
-      System.err.println("[node #" + id + "] Writing index to: " + IndexPath)
-      indexer.write(IndexPath)
-      indexed = true
+      index = Some(indexer.index())
     }
 
     Future.value(successResponse())
@@ -44,21 +36,18 @@ class SearchServer(port : Int, id : Int) extends AbstractSearchServer(port, id) 
   def handleSearch(q: String) = {
     val searches = new Broker[Query]()
     searches.recv foreach { q =>
-      FuturePool.unboundedPool {searcher.search(q.q, q.broker)}
+      FuturePool.unboundedPool {index.get.search(q.q, q.broker)}
     }
 
     val matches = new Broker[SearchResult]()
-    val err = new Broker[Throwable]
     searches ! new Query(q, matches)
 
-    val promise = Promise[HttpResponse]
-    var results = List[Match]()
+    val promise = Promise[HttpResponse]()
+    var results = Set[Match]()
 
-    matches.recv foreach { m =>
-      m match {
-        case m : Match => results = m :: results
-        case Done() => promise.setValue(querySuccessResponse(results))
-      }
+    matches.recv foreach {
+      case m: Match => results = results + m
+      case Done() => promise.setValue(querySuccessResponse(results))
     }
 
     promise
