@@ -40,10 +40,7 @@ solve() {
     parent=$(git rev-parse HEAD)
     timestamp=$(date +%s)
 
-    counter=0
-
-    while let counter=counter+1; do
-	echo -n .
+    salt=$(java -jar ../gitcoin.jar $tree $parent $timestamp $difficulty)
 
 	body="tree $tree
 parent $parent
@@ -52,20 +49,16 @@ committer CTF user <me@example.com> $timestamp +0000
 
 Give me a Gitcoin
 
-$counter"
+$salt"
 
 	# See http://git-scm.com/book/en/Git-Internals-Git-Objects for
 	# details on Git objects.
 	sha1=$(git hash-object -t commit --stdin <<< "$body")
 
-	if [ "$sha1" "<" "$difficulty" ]; then
-	    echo
-	    echo "Mined a Gitcoin with commit: $sha1"
-	    git hash-object -t commit --stdin -w <<< "$body"  > /dev/null
-	    git reset --hard "$sha1" > /dev/null
-	    break
-	fi
-    done
+    echo
+    echo "Mined a Gitcoin with commit: $sha1"
+    git hash-object -t commit --stdin -w <<< "$body"  > /dev/null
+    git reset --hard "$sha1" > /dev/null
 }
 
 reset() {
